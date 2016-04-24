@@ -20,6 +20,7 @@
 #define VC_STATUS_INVALID_PARAMETER     -3
 #define VC_STATUS_SYSENC_PARTIAL         1
 #define VC_STATUS_SYSENC_NONE            2
+#define VC_STATUS_NOT_VOLUME             3
 
 // possible state values of system encryption
 typedef enum
@@ -184,9 +185,21 @@ void PrintVolumeInformation (VOLUME_PROPERTIES_STRUCT& prop)
 
 }
 
-void PrintUsage (TCHAR* progName)
+void PrintUsage ()
 {
-    _tprintf (TEXT("Usage: %s /sysenc\n\n"), progName);
+    _tprintf (TEXT("Usage:\n"));
+    _tprintf (TEXT("   Querying system encryption information: VeraStatus.exe [/sysenc]\n"));
+    _tprintf (TEXT("   Querying volume encryption information: VeraStatus.exe DriveLetter: (e.g. VeraStatus.exe O:)\n"));
+    _tprintf (TEXT("   Display this help message: VeraStatus.exe /h\n\n"));
+    _tprintf (TEXT("The exit code of the process can be one of the following values:\n"));
+    _tprintf (TEXT("   0: The system/volume is encrypted.\n"));
+    _tprintf (TEXT("   1: [only when /sysenc specified] The system is partially encrypted.\n"));
+    _tprintf (TEXT("   2: [only when /sysenc specified] The system is not encrypted.\n"));
+    _tprintf (TEXT("   3: [only when DriveLetter: specified] The drive letter doesn't correspond to a mounted VeraCrypt volume.\n"));
+    _tprintf (TEXT("  -1: VeraCrypt Windows driver not found.\n"));
+    _tprintf (TEXT("  -2: Error occured when calling VeraCrypt Windows driver.\n"));
+    _tprintf (TEXT("  -3: Incorrect command line parameter specified.\n"));
+    _tprintf (TEXT("\n"));
 }
 
 
@@ -204,7 +217,6 @@ int _tmain (int argc, TCHAR** argv)
     hDriver = CreateFileW (L"\\\\.\\VeraCrypt", 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
     if (hDriver != INVALID_HANDLE_VALUE)
     {
-        // for now, we support only querying system encryption status
         if ((argc == 1) || ((argc == 2) && (_tcsicmp (argv[1], TEXT("/sysenc")) == 0)))
         {
             DWORD cbBytesReturned = 0;
@@ -245,10 +257,49 @@ int _tmain (int argc, TCHAR** argv)
                 iRet = VC_STATUS_DRIVER_CALL_FAILED;
             }
         }
+        else if ((argc == 2) && (_tcslen (argv[1]) == 2) && (argv[1][1] == TEXT(':')) && (_totupper(argv[1][0]) >= TEXT('A')) && (_totupper(argv[1][0]) <= TEXT('Z')))
+        {
+            DWORD cbBytesReturned = 0;
+            VOLUME_PROPERTIES_STRUCT prop;
+            MOUNT_LIST_STRUCT mlist;
+
+			prop.driveNo = _totupper(argv[1][0]) - TEXT('A');    
+
+	        memset (&mlist, 0, sizeof (mlist));
+	        if (DeviceIoControl (hDriver, VC_IOCTL_GET_MOUNTED_VOLUMES, &mlist, sizeof (mlist), &mlist, sizeof (mlist), &cbBytesReturned, NULL))
+            {
+	            if (mlist.ulMountedDrives & (1 << prop.driveNo))
+                {
+			        if (DeviceIoControl (hDriver, VC_IOCTL_GET_VOLUME_PROPERTIES, &prop, sizeof (prop), &prop, sizeof (prop), &cbBytesReturned, NULL))
+			        {
+                        PrintVolumeInformation (prop);
+                    }
+                    else
+                    {
+                        _tprintf(TEXT("Call to VeraCrypt driver (GET_VOLUME_PROPERTIES) failed with error code 0x%.8X.\n"), GetLastError ());
+                        iRet = VC_STATUS_DRIVER_CALL_FAILED;
+                    }
+                }
+                else
+                {
+                    _tprintf(TEXT("Drive letter %s doesn't correspond to a mounted VeraCrypt volume.\n"), argv[1]);
+                    iRet = VC_STATUS_NOT_VOLUME;                    
+	            }
+            }
+            else
+            {
+                _tprintf(TEXT("Call to VeraCrypt driver (GET_MOUNTED_VOLUMES) failed with error code 0x%.8X.\n"), GetLastError ());
+                iRet = VC_STATUS_DRIVER_CALL_FAILED;
+            }
+        }
+        else if ((argc == 2) && ((_tcsicmp (argv[1], TEXT("/?")) == 0 || _tcsicmp (argv[1], TEXT("/h")) == 0 || _tcsicmp (argv[1], TEXT("/help")) == 0)))
+        {
+            PrintUsage ();
+        }
         else
         {
             _tprintf (TEXT("Error: Invalid parameter(s).\n"));
-            PrintUsage (argv[0]);
+            PrintUsage ();
             iRet = VC_STATUS_INVALID_PARAMETER;
         }
 

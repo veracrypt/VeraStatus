@@ -23,6 +23,8 @@
 
 #define VC_IOCTL(CODE) (CTL_CODE (FILE_DEVICE_UNKNOWN, 0x800 + (CODE), METHOD_BUFFERED, FILE_ANY_ACCESS))
 
+#define VC_IOCTL_GET_MOUNTED_VOLUMES					VC_IOCTL (6)
+#define VC_IOCTL_GET_VOLUME_PROPERTIES					VC_IOCTL (7)
 #define VC_IOCTL_GET_BOOT_ENCRYPTION_STATUS				VC_IOCTL (18)
 #define VC_IOCTL_GET_BOOT_DRIVE_VOLUME_PROPERTIES		VC_IOCTL (22)
 
@@ -30,6 +32,18 @@
 
 #pragma pack (push)
 #pragma pack(1)
+
+typedef struct
+{
+	unsigned __int32 ulMountedDrives;	/* Bitfield of all mounted drive letters */
+	wchar_t wszVolume[26][260];	/* Volume names of mounted volumes */
+	wchar_t wszLabel[26][33];	/* Labels of mounted volumes */
+	wchar_t volumeID[26][VOLUME_ID_SIZE];	/* IDs of mounted volumes */
+	unsigned __int64 diskLength[26];
+	int ea[26];
+	int volumeType[26];	/* Volume type (e.g. PROP_VOL_TYPE_OUTER, PROP_VOL_TYPE_OUTER_VOL_WRITE_PREVENTED, etc.) */
+	BOOL truecryptMode[26];
+} MOUNT_LIST_STRUCT;
 
 typedef enum
 {
