@@ -143,6 +143,14 @@ LPCTSTR GetPrfAlgorithmName (int pkcs5)
     }
 }
 
+void PrintBuffer (unsigned char* pbData, size_t cbData)
+{
+    while (cbData--)
+    {
+        _tprintf(TEXT("%.2X"), *pbData++);
+    }
+}
+
 void PrintVolumeInformation (VOLUME_PROPERTIES_STRUCT& prop)
 {
     // display only relevant fields
@@ -150,6 +158,7 @@ void PrintVolumeInformation (VOLUME_PROPERTIES_STRUCT& prop)
     {
         _tprintf(TEXT("Drive Letter: %c\n"), TEXT('A') + prop.driveNo);
         _tprintf(TEXT("Volume: %s\n"), prop.wszVolume);
+        _tprintf(TEXT("Volume ID: ")); PrintBuffer (prop.volumeID, sizeof (prop.volumeID)); _tprintf(TEXT("\n"));
         if (prop.bDriverSetLabel)
         {
             _tprintf(TEXT("Volume Label: %s\n"), prop.wszLabel);

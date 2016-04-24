@@ -26,6 +26,7 @@
 #define VC_IOCTL_GET_BOOT_ENCRYPTION_STATUS				VC_IOCTL (18)
 #define VC_IOCTL_GET_BOOT_DRIVE_VOLUME_PROPERTIES		VC_IOCTL (22)
 
+#define VOLUME_ID_SIZE	32
 
 #pragma pack (push)
 #pragma pack(1)
@@ -94,6 +95,7 @@ typedef struct
 	int volumePim;
 	wchar_t wszLabel[33];
 	BOOL bDriverSetLabel;
+	unsigned char volumeID[VOLUME_ID_SIZE];
 } VOLUME_PROPERTIES_STRUCT;
 
 #pragma pack (pop)
