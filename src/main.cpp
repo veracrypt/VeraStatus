@@ -123,11 +123,14 @@ LPCTSTR GetEncryptionAlgorithmName (int ea)
     case 1: return TEXT("AES");
     case 2: return TEXT("Serpent");
     case 3: return TEXT("Twofish");
-    case 4: return TEXT("AES(Twofish)");
-    case 5: return TEXT("AES(Twofish(Serpent))");
-    case 6: return TEXT("Serpent(AES)");
-    case 7: return TEXT("Serpent(Twofish(AES))");
-    case 8: return TEXT("Twofish(Serpent)");
+    case 4: return TEXT("Camellia");
+    case 5: return TEXT("GOST89");
+    case 6: return TEXT("Kuznyechik");
+    case 7: return TEXT("AES(Twofish)");
+    case 8: return TEXT("AES(Twofish(Serpent))");
+    case 9: return TEXT("Serpent(AES)");
+    case 10: return TEXT("Serpent(Twofish(AES))");
+    case 11: return TEXT("Twofish(Serpent)");
     default: return TEXT("Unknown");
     }
 }
@@ -140,6 +143,7 @@ LPCTSTR GetPrfAlgorithmName (int pkcs5)
     case 2: return TEXT("HMAC-Whirlpool");
     case 3: return TEXT("HMAC-SHA-256");
     case 4: return TEXT("HMAC-RIPEMD-160");
+    case 5: return TEXT("HMAC-STREEBOG");
     default: return TEXT("Unknown");
     }
 }
