@@ -12,6 +12,7 @@
  code distribution packages. */
 
 #include "defs.h"
+#include <strsafe.h>
 
 // Exit codes values
 #define VC_STATUS_OK                    0
@@ -118,9 +119,10 @@ eSysEncState PrintSystemEncryptionInformation (BootEncryptionStatus& status)
 
 LPCTSTR GetEncryptionAlgorithmName (int ea)
 {
+	static TCHAR g_szName[128];
     switch (ea)
     {
-    case 1: return TEXT("AES");
+	case 1: return TEXT("AES");
     case 2: return TEXT("Serpent");
     case 3: return TEXT("Twofish");
     case 4: return TEXT("Camellia");
@@ -131,7 +133,14 @@ LPCTSTR GetEncryptionAlgorithmName (int ea)
     case 9: return TEXT("Serpent(AES)");
     case 10: return TEXT("Serpent(Twofish(AES))");
     case 11: return TEXT("Twofish(Serpent)");
-    default: return TEXT("Unknown");
+	case 12: return TEXT("Camellia(Kuznyechik)");
+	case 13: return TEXT("Kuznyechik(Twofish)");
+	case 14: return TEXT("Camellia(Serpent)");
+	case 15: return TEXT("Kuznyechik(AES)");
+	case 16: return TEXT("Kuznyechik(Serpent(Camellia))");
+    default: 
+		StringCbPrintf (g_szName, sizeof (g_szName), TEXT("Unknown (id = %d)"), ea);
+		return g_szName;
     }
 }
 
@@ -214,7 +223,7 @@ int _tmain (int argc, TCHAR** argv)
 
     _tprintf(TEXT("\n"));
     _tprintf(TEXT("Status of VeraCrypt encryption.By Mounir IDRASSI (mounir@idrix.fr)\n"));
-    _tprintf(TEXT("Copyright (c) 2016 IDRIX\n"));
+    _tprintf(TEXT("Copyright (c) 2016-2018 IDRIX\n"));
     _tprintf(TEXT("\n\n"));
 
     // connect to the VeraCrypt driver
