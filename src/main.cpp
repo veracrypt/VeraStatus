@@ -274,7 +274,7 @@ int _tmain (int argc, TCHAR** argv)
 
     _tprintf(TEXT("\n"));
     _tprintf(TEXT("Status of VeraCrypt encryption.By Mounir IDRASSI (mounir@idrix.fr)\n"));
-    _tprintf(TEXT("Copyright (c) 2016-2018 IDRIX\n"));
+    _tprintf(TEXT("Version 1.4 - Copyright (c) 2016-2019 IDRIX\n"));
     _tprintf(TEXT("\n\n"));
 
     // connect to the VeraCrypt driver
