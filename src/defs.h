@@ -110,6 +110,7 @@ typedef struct
 	wchar_t wszLabel[33];
 	BOOL bDriverSetLabel;
 	unsigned char volumeID[VOLUME_ID_SIZE];
+	BOOL mountDisabled;
 } VOLUME_PROPERTIES_STRUCT;
 
 #pragma pack (pop)
