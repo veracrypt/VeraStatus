@@ -170,7 +170,12 @@ void PrintVolumeInformation (VOLUME_PROPERTIES_STRUCT& prop)
     // display only relevant fields
     if (prop.wszVolume[0])
     {
-        _tprintf(TEXT("Drive Letter: %c\n"), TEXT('A') + prop.driveNo);
+		int driveLetter = TEXT('A') + prop.driveNo;
+		if (prop.mountDisabled)
+			_tprintf(TEXT("Drive Letter: %c (Virtual Device Only)\n"), driveLetter);
+		else
+			_tprintf(TEXT("Drive Letter: %c\n"), driveLetter);
+		_tprintf(TEXT("Virtual Device: \\Device\\VeraCryptVolume%c\n"), driveLetter);
         _tprintf(TEXT("Volume: %s\n"), prop.wszVolume);
         _tprintf(TEXT("Volume ID: ")); PrintBuffer (prop.volumeID, sizeof (prop.volumeID)); _tprintf(TEXT("\n"));
         if (prop.bDriverSetLabel)
