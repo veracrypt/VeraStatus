@@ -31,6 +31,42 @@ typedef enum
     SYSENC_NONE = 2
 } eSysEncState;
 
+LPTSTR GetWin32ErrorStr (DWORD dwError)
+{
+	LPTSTR lpMsgBuf = NULL;
+	static TCHAR g_szErrMsg[1024];	
+
+	FormatMessage (
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+			      NULL,
+			      dwError,
+			      MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),	/* Default language */
+			      (PWSTR) &lpMsgBuf,
+			      0,
+			      NULL
+	    );
+
+	if (lpMsgBuf)
+	{
+		LPTSTR szFormatMsg = (LPTSTR) lpMsgBuf;
+		size_t msgLen = _tcslen(szFormatMsg);
+		// remove ending \r\n
+		if (msgLen >= 1 && szFormatMsg[msgLen - 1] == TEXT('\n'))
+			szFormatMsg[msgLen - 1] = 0;
+		if (msgLen >= 2 && szFormatMsg[msgLen - 2] == TEXT('\r'))
+			szFormatMsg[msgLen - 2] = 0;
+		StringCchPrintf (g_szErrMsg, ARRAYSIZE (g_szErrMsg), TEXT("0x%.8X: %s"), dwError, szFormatMsg);
+	}
+	else
+	{
+		StringCchPrintf (g_szErrMsg, ARRAYSIZE (g_szErrMsg), TEXT("0x%.8X."), dwError);
+	}
+
+	if (lpMsgBuf) LocalFree (lpMsgBuf);
+
+	return g_szErrMsg;
+}
+
 
 // get the state of system encryption from the status returned by the driver
 eSysEncState GetSystemEncryptionState (BootEncryptionStatus& status)
@@ -203,11 +239,21 @@ void PrintVolumeInformation (VOLUME_PROPERTIES_STRUCT& prop)
 
 }
 
+BOOL IsDriveLetter (LPCTSTR szName)
+{
+	BOOL bRet = FALSE;
+	if ((_tcslen (szName) == 2) && (szName[1] == TEXT(':')) && (_totupper(szName[0]) >= TEXT('A')) && (_totupper(szName[0]) <= TEXT('Z')))
+		bRet = TRUE;
+	return bRet;
+}
+
 void PrintUsage ()
 {
     _tprintf (TEXT("Usage:\n"));
     _tprintf (TEXT("   Querying system encryption information: VeraStatus.exe [/sysenc]\n"));
     _tprintf (TEXT("   Querying volume encryption information: VeraStatus.exe DriveLetter: (e.g. VeraStatus.exe O:)\n"));
+    _tprintf (TEXT("   List all mounted volumes: VeraStatus.exe /list\n"));
+    _tprintf (TEXT("   Clear volumes master keys from RAM including system encryption ones: VeraStatus.exe /clearkeys\n"));
     _tprintf (TEXT("   Display this help message: VeraStatus.exe /h\n\n"));
     _tprintf (TEXT("The exit code of the process can be one of the following values:\n"));
     _tprintf (TEXT("   0: The system/volume is encrypted.\n"));
@@ -257,7 +303,7 @@ int _tmain (int argc, TCHAR** argv)
                     }
                     else
                     {
-                        _tprintf(TEXT("Call to VeraCrypt driver (GET_BOOT_DRIVE_VOLUME_PROPERTIES) failed with error code 0x%.8X.\n"), GetLastError ());
+                        _tprintf(TEXT("Call to VeraCrypt driver (GET_BOOT_DRIVE_VOLUME_PROPERTIES) failed with error %s\n"), GetWin32ErrorStr(GetLastError ()));
                     }
                 }
 
@@ -271,48 +317,90 @@ int _tmain (int argc, TCHAR** argv)
             }
             else
             {
-                _tprintf(TEXT("Call to VeraCrypt driver (GET_BOOT_ENCRYPTION_STATUS) failed with error code 0x%.8X.\n"), GetLastError ());
+                _tprintf(TEXT("Call to VeraCrypt driver (GET_BOOT_ENCRYPTION_STATUS) failed with error %s\n"), GetWin32ErrorStr(GetLastError ()));
                 iRet = VC_STATUS_DRIVER_CALL_FAILED;
             }
         }
-        else if ((argc == 2) && (_tcslen (argv[1]) == 2) && (argv[1][1] == TEXT(':')) && (_totupper(argv[1][0]) >= TEXT('A')) && (_totupper(argv[1][0]) <= TEXT('Z')))
+        else if ((argc == 2) && ((_tcsicmp (argv[1], TEXT("/list")) == 0) || IsDriveLetter (argv[1])))
         {
             DWORD cbBytesReturned = 0;
             VOLUME_PROPERTIES_STRUCT prop;
-            MOUNT_LIST_STRUCT mlist;
-
-			prop.driveNo = _totupper(argv[1][0]) - TEXT('A');    
+            MOUNT_LIST_STRUCT mlist;			
 
 	        memset (&mlist, 0, sizeof (mlist));
 	        if (DeviceIoControl (hDriver, VC_IOCTL_GET_MOUNTED_VOLUMES, &mlist, sizeof (mlist), &mlist, sizeof (mlist), &cbBytesReturned, NULL))
             {
-	            if (mlist.ulMountedDrives & (1 << prop.driveNo))
-                {
-			        if (DeviceIoControl (hDriver, VC_IOCTL_GET_VOLUME_PROPERTIES, &prop, sizeof (prop), &prop, sizeof (prop), &cbBytesReturned, NULL))
-			        {
-                        PrintVolumeInformation (prop);
-                    }
-                    else
-                    {
-                        _tprintf(TEXT("Call to VeraCrypt driver (GET_VOLUME_PROPERTIES) failed with error code 0x%.8X.\n"), GetLastError ());
-                        iRet = VC_STATUS_DRIVER_CALL_FAILED;
-                    }
-                }
-                else
-                {
-                    _tprintf(TEXT("Drive letter %s doesn't correspond to a mounted VeraCrypt volume.\n"), argv[1]);
-                    iRet = VC_STATUS_NOT_VOLUME;                    
-	            }
+				if (_tcsicmp (argv[1], TEXT("/list")) == 0)
+				{
+					int count = 0;
+					_tprintf(TEXT("Mounted volumes: "));
+					for (int i=0; i < 26; i++)
+					{
+						if (mlist.ulMountedDrives & (1 << i))
+						{
+							_tprintf(TEXT("%c:, "), TEXT('A') + i);
+							count++;
+						}
+					}
+
+					if (count)
+					{
+						_puttchar (VK_BACK);
+						_puttchar (VK_BACK);
+						_tprintf(TEXT("  \n"));
+					}
+					else
+					{
+						_tprintf(TEXT("\rNo volumes are currently mounted on this machine.\n"));
+					}
+				}
+				else
+				{
+					prop.driveNo = _totupper(argv[1][0]) - TEXT('A');    
+					if (mlist.ulMountedDrives & (1 << prop.driveNo))
+					{
+						if (DeviceIoControl (hDriver, VC_IOCTL_GET_VOLUME_PROPERTIES, &prop, sizeof (prop), &prop, sizeof (prop), &cbBytesReturned, NULL))
+						{
+							PrintVolumeInformation (prop);
+						}
+						else
+						{
+							_tprintf(TEXT("Call to VeraCrypt driver (GET_VOLUME_PROPERTIES) failed with error %s\n"), GetWin32ErrorStr(GetLastError ()));
+							iRet = VC_STATUS_DRIVER_CALL_FAILED;
+						}
+					}
+					else
+					{
+						_tprintf(TEXT("Drive letter %s doesn't correspond to a mounted VeraCrypt volume.\n"), argv[1]);
+						iRet = VC_STATUS_NOT_VOLUME;                    
+					}
+				}
             }
             else
             {
-                _tprintf(TEXT("Call to VeraCrypt driver (GET_MOUNTED_VOLUMES) failed with error code 0x%.8X.\n"), GetLastError ());
+                _tprintf(TEXT("Call to VeraCrypt driver (GET_MOUNTED_VOLUMES) failed with error %s\n"), GetWin32ErrorStr(GetLastError ()));
                 iRet = VC_STATUS_DRIVER_CALL_FAILED;
             }
         }
         else if ((argc == 2) && ((_tcsicmp (argv[1], TEXT("/?")) == 0 || _tcsicmp (argv[1], TEXT("/h")) == 0 || _tcsicmp (argv[1], TEXT("/help")) == 0)))
         {
             PrintUsage ();
+        }
+        else if ((argc == 2) && ((_tcsicmp (argv[1], TEXT("/clearkeys")) == 0)))
+        {
+            DWORD cbBytesReturned = 0;
+        
+            // Ask VeraCrypt driver to clear Encrypion keys for all mounted volumes (including Encrypted System) from RAM 
+			// In case of system encryption, this will freeze the system. For mounted volume, this will render them unusable
+            if (DeviceIoControl (hDriver, VC_IOCTL_EMERGENCY_CLEAR_KEYS, NULL, 0, NULL, 0, &cbBytesReturned, NULL))
+            {
+				_tprintf (TEXT("Keys cleared successfully!\n"));
+			}
+            else
+            {
+                _tprintf(TEXT("Call to VeraCrypt driver (VC_IOCTL_EMERGENCY_SYSENC_CLEAR_KEYS) failed with error %s\n"), GetWin32ErrorStr(GetLastError ()));
+                iRet = VC_STATUS_DRIVER_CALL_FAILED;
+            }
         }
         else
         {
@@ -325,7 +413,7 @@ int _tmain (int argc, TCHAR** argv)
     }
     else
     {
-        _tprintf(TEXT("Failed to connect to VeraCrypt driver. Please check your installation. Error Code: 0x%.8X\n"), GetLastError ());
+        _tprintf(TEXT("Failed to connect to VeraCrypt driver. Please check your installation. Error %s\n"), GetWin32ErrorStr(GetLastError ()));
         iRet = VC_STATUS_NO_DRIVER;
     }
 
