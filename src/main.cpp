@@ -98,7 +98,7 @@ eSysEncState GetSystemEncryptionState (BootEncryptionStatus& status)
 }
 
 // print the status of system encryption as returned by the driver
-eSysEncState PrintSystemEncryptionInformation (BootEncryptionStatus& status)
+eSysEncState PrintSystemEncryptionInformation (BootEncryptionStatus& status, DWORD cbSize)
 {
     double dVal;
     eSysEncState state = GetSystemEncryptionState (status);
@@ -148,6 +148,12 @@ eSysEncState PrintSystemEncryptionInformation (BootEncryptionStatus& status)
         _tprintf(TEXT("Encrypted Area Start: %I64d\n"), status.EncryptedAreaStart);
         _tprintf(TEXT("Configured Encrypted Area End: %I64d\n"), status.ConfiguredEncryptedAreaEnd);
         _tprintf(TEXT("Encrypted Area End: %I64d\n"), status.EncryptedAreaEnd);
+
+		// if the size of the status is smaller than the size of the structure, it means the driver is older than version 1.26.13 where the MasterKeyVulnerable field was added
+        if (cbSize >= sizeof(BootEncryptionStatus))
+        {
+            _tprintf(TEXT("Master Key Vulnerable: %s\n"), status.MasterKeyVulnerable ? TEXT("Yes") : TEXT("No"));
+        }
     }
 
     return state;
@@ -271,35 +277,60 @@ int _tmain (int argc, TCHAR** argv)
 {
     int iRet = 0;
     HANDLE hDriver = INVALID_HANDLE_VALUE;
+	LONG DriverVersion = 0;
+    BOOL bResult;
+	DWORD dwResult;
 
     _tprintf(TEXT("\n"));
     _tprintf(TEXT("Status of VeraCrypt encryption.By Mounir IDRASSI (mounir@idrix.fr)\n"));
-    _tprintf(TEXT("Version 1.4 - Copyright (c) 2016-2019 IDRIX\n"));
-    _tprintf(TEXT("\n\n"));
+    _tprintf(TEXT("Version 1.5 - Copyright (c) 2016-2025 IDRIX\n"));
+    _tprintf(TEXT("\n"));
 
     // connect to the VeraCrypt driver
     hDriver = CreateFileW (L"\\\\.\\VeraCrypt", 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
     if (hDriver != INVALID_HANDLE_VALUE)
     {
+        bResult = DeviceIoControl(hDriver, VC_IOCTL_GET_DRIVER_VERSION, NULL, 0, &DriverVersion, sizeof(DriverVersion), &dwResult, NULL);
+        if (bResult == FALSE)
+        {
+            _tprintf(TEXT("Failed to get VeraCrypt driver version. Error %s\n"), GetWin32ErrorStr(GetLastError()));
+            iRet = VC_STATUS_DRIVER_CALL_FAILED;
+            goto end;
+        }
+        
+        _tprintf(TEXT("VeraCrypt driver version: %x.%x\n\n"), (int)(unsigned char)(DriverVersion >> 8), (int)(unsigned char)(DriverVersion & 0x000000FF));
+        
         if ((argc == 1) || ((argc == 2) && (_tcsicmp (argv[1], TEXT("/sysenc")) == 0)))
         {
             DWORD cbBytesReturned = 0;
             BootEncryptionStatus status;
         
             // Get system encryption status from VeraCrypt driver
-            if (DeviceIoControl (hDriver, VC_IOCTL_GET_BOOT_ENCRYPTION_STATUS, NULL, 0, &status, sizeof (status), &cbBytesReturned, NULL))
+            if (DeviceIoControl(hDriver, VC_IOCTL_GET_BOOT_ENCRYPTION_STATUS, NULL, 0, &status, sizeof(status), &cbBytesReturned, NULL))
             {
-                eSysEncState state = PrintSystemEncryptionInformation (status);
+                eSysEncState state = PrintSystemEncryptionInformation (status, cbBytesReturned);
 
                 if (state != SYSENC_NONE)
                 {
                     VOLUME_PROPERTIES_STRUCT prop;
+                    UINT16 bootloaderVersion = 0;
 
                     cbBytesReturned = 0;
                     if (DeviceIoControl (hDriver, VC_IOCTL_GET_BOOT_DRIVE_VOLUME_PROPERTIES, NULL, 0, &prop, sizeof (prop), &cbBytesReturned, NULL))
                     {
                         _tprintf(TEXT("\n"));
                         PrintVolumeInformation (prop);
+
+                        // get the bootloader version
+                        cbBytesReturned = 0;
+                        if (DeviceIoControl(hDriver, VC_IOCTL_GET_BOOT_LOADER_VERSION, NULL, 0, &bootloaderVersion, sizeof(bootloaderVersion), &cbBytesReturned, NULL))
+                        {
+                            _tprintf(TEXT("\nBootloader version: %x.%x\n"), (int)(bootloaderVersion >> 8), (int)(bootloaderVersion & 0x00FF));
+						}
+						else
+						{
+                            _tprintf(TEXT("Call to VeraCrypt driver (GET_BOOT_LOADER_VERSION) failed with error %s\n"), GetWin32ErrorStr(GetLastError()));
+                        }
                     }
                     else
                     {
@@ -408,14 +439,16 @@ int _tmain (int argc, TCHAR** argv)
             PrintUsage ();
             iRet = VC_STATUS_INVALID_PARAMETER;
         }
-
-        CloseHandle (hDriver);
     }
     else
     {
         _tprintf(TEXT("Failed to connect to VeraCrypt driver. Please check your installation. Error %s\n"), GetWin32ErrorStr(GetLastError ()));
         iRet = VC_STATUS_NO_DRIVER;
     }
-
+end:
+    if (hDriver != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(hDriver);
+    }
     return iRet;
 }

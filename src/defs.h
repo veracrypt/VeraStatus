@@ -23,6 +23,9 @@
 
 #define VC_IOCTL(CODE) (CTL_CODE (FILE_DEVICE_UNKNOWN, 0x800 + (CODE), METHOD_BUFFERED, FILE_ANY_ACCESS))
 
+
+#define VC_IOCTL_GET_DRIVER_VERSION						VC_IOCTL (1)
+#define VC_IOCTL_GET_BOOT_LOADER_VERSION				VC_IOCTL (2)
 #define VC_IOCTL_GET_MOUNTED_VOLUMES					VC_IOCTL (6)
 #define VC_IOCTL_GET_VOLUME_PROPERTIES					VC_IOCTL (7)
 #define VC_IOCTL_GET_BOOT_ENCRYPTION_STATUS				VC_IOCTL (18)
@@ -85,6 +88,8 @@ typedef struct
 	// Number of times the filter driver answered that an unencrypted volume
 	// is read-only (or mounted an outer/normal TrueCrypt volume as read only)
 	unsigned int HiddenSysLeakProtectionCount;
+
+	BOOL MasterKeyVulnerable; // introduced in version 1.26.13
 
 } BootEncryptionStatus;
 
